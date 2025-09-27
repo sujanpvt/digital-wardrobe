@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const express = require('express');
+const net = require('net');
 
 // Test database connection
 async function testDatabase() {
@@ -34,26 +35,51 @@ function testEnvironment() {
   return true;
 }
 
-// Test server startup
+// Check if a port is available
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const tester = net.createServer()
+      .once('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          resolve(false);
+        } else {
+          resolve(false);
+        }
+      })
+      .once('listening', () => {
+        tester.close(() => resolve(true));
+      })
+      .listen(port);
+  });
+}
+
+// Test server startup (handles port conflicts by using an ephemeral port)
 async function testServer() {
-  try {
-    console.log('🔍 Testing server startup...');
-    const app = express();
-    const PORT = process.env.PORT || 5000;
-    
-    app.get('/test', (req, res) => {
-      res.json({ status: 'OK', message: 'Server is running' });
-    });
-    
-    const server = app.listen(PORT, () => {
-      console.log('✅ Server started successfully on port', PORT);
-      server.close();
-      return true;
-    });
-  } catch (error) {
-    console.error('❌ Server startup failed:', error.message);
-    return false;
+  console.log('🔍 Testing server startup...');
+  const app = express();
+  const PORT = parseInt(process.env.PORT, 10) || 5000;
+  const available = await isPortAvailable(PORT);
+  const targetPort = available ? PORT : 0; // 0 = random available port
+  if (!available) {
+    console.log(`⚠️  Port ${PORT} is in use. Testing on an available port instead.`);
   }
+
+  app.get('/test', (req, res) => {
+    res.json({ status: 'OK', message: 'Server is running' });
+  });
+
+  return new Promise((resolve) => {
+    const server = app.listen(targetPort, () => {
+      const usedPort = server.address().port;
+      console.log('✅ Server started successfully on port', usedPort);
+      server.close(() => resolve(true));
+    });
+
+    server.on('error', (error) => {
+      console.error('❌ Server startup failed:', error.message);
+      resolve(false);
+    });
+  });
 }
 
 // Run all tests

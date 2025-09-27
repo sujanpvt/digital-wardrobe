@@ -3,6 +3,8 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const ClothingItem = require('../models/ClothingItem');
 const auth = require('../middleware/auth');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
@@ -59,13 +61,36 @@ router.post('/upload', auth, upload.single('image'), async (req, res) => {
       notes
     } = req.body;
 
-    // Upload image to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: 'wardrobe',
-      transformation: [
-        { width: 800, height: 800, crop: 'fill', quality: 'auto' }
-      ]
-    });
+    // Determine storage strategy (Cloudinary or local fallback)
+    const cloudConfigured =
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET &&
+      !String(process.env.CLOUDINARY_CLOUD_NAME).startsWith('your-');
+
+    let imageUrl;
+    let imagePublicId = null;
+
+    if (cloudConfigured) {
+      try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'wardrobe',
+          transformation: [
+            { width: 800, height: 800, crop: 'fill', quality: 'auto' }
+          ]
+        });
+        imageUrl = result.secure_url;
+        imagePublicId = result.public_id;
+        // Clean up local file after successful cloud upload
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+      } catch (cloudErr) {
+        console.error('Cloudinary upload failed, using local file:', cloudErr);
+        imageUrl = `${req.protocol}://${req.get('host')}/uploads/${path.basename(req.file.path)}`;
+      }
+    } else {
+      // Local storage fallback
+      imageUrl = `${req.protocol}://${req.get('host')}/uploads/${path.basename(req.file.path)}`;
+    }
 
     // Create clothing item
     const clothingItem = new ClothingItem({
@@ -76,8 +101,8 @@ router.post('/upload', auth, upload.single('image'), async (req, res) => {
       color,
       brand,
       size,
-      imageUrl: result.secure_url,
-      imagePublicId: result.public_id,
+      imageUrl,
+      imagePublicId,
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
       style,
       season,
@@ -88,9 +113,7 @@ router.post('/upload', auth, upload.single('image'), async (req, res) => {
 
     await clothingItem.save();
 
-    // Clean up local file
-    const fs = require('fs');
-    fs.unlinkSync(req.file.path);
+    // If using local fallback, keep the file on disk (already served statically)
 
     res.status(201).json({
       message: 'Clothing item uploaded successfully',
