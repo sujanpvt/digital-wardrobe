@@ -1,0 +1,14 @@
+# MongoDB Atlas Connection String Template
+# Replace the placeholders with your actual values
+
+MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@cluster0.xxxxx.mongodb.net/digital-wardrobe?retryWrites=true&w=majority
+
+# Example with sample values:
+# MONGODB_URI=mongodb+srv://wardrobe-user:wardrobe123@cluster0.abc123.mongodb.net/digital-wardrobe?retryWrites=true&w=majority
+
+# Instructions:
+# 1. Replace USERNAME with your database username
+# 2. Replace PASSWORD with your database password  
+# 3. Replace cluster0.xxxxx with your actual cluster URL
+# 4. Keep digital-wardrobe as the database name
+# 5. Copy this line and replace the MONGODB_URI in your .env file
