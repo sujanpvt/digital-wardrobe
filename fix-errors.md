@@ -51,3 +51,4 @@ npm install lucide-react@latest
 # Fix backend dependencies
 npm install
 ```
+

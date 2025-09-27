@@ -12,3 +12,4 @@ MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@cluster0.xxxxx.mongodb.net/digital-w
 # 3. Replace cluster0.xxxxx with your actual cluster URL
 # 4. Keep digital-wardrobe as the database name
 # 5. Copy this line and replace the MONGODB_URI in your .env file
+

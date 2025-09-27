@@ -61,35 +61,40 @@ router.post('/upload', auth, upload.single('image'), async (req, res) => {
       notes
     } = req.body;
 
-    // Determine storage strategy (Cloudinary or local fallback)
+    // Enforce Cloudinary-only uploads
     const cloudConfigured =
       process.env.CLOUDINARY_CLOUD_NAME &&
       process.env.CLOUDINARY_API_KEY &&
       process.env.CLOUDINARY_API_SECRET &&
       !String(process.env.CLOUDINARY_CLOUD_NAME).startsWith('your-');
 
-    let imageUrl;
-    let imagePublicId = null;
+    if (!cloudConfigured) {
+      // Clean up temp file and reject upload when Cloudinary is not configured
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+      return res.status(500).json({
+        message: 'Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET.'
+      });
+    }
 
-    if (cloudConfigured) {
-      try {
-        const result = await cloudinary.uploader.upload(req.file.path, {
-          folder: 'wardrobe',
-          transformation: [
-            { width: 800, height: 800, crop: 'fill', quality: 'auto' }
-          ]
-        });
-        imageUrl = result.secure_url;
-        imagePublicId = result.public_id;
-        // Clean up local file after successful cloud upload
-        try { fs.unlinkSync(req.file.path); } catch (_) {}
-      } catch (cloudErr) {
-        console.error('Cloudinary upload failed, using local file:', cloudErr);
-        imageUrl = `${req.protocol}://${req.get('host')}/uploads/${path.basename(req.file.path)}`;
-      }
-    } else {
-      // Local storage fallback
-      imageUrl = `${req.protocol}://${req.get('host')}/uploads/${path.basename(req.file.path)}`;
+    let imageUrl;
+    let imagePublicId;
+
+    try {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'wardrobe',
+        transformation: [
+          { width: 800, height: 800, crop: 'fill', quality: 'auto' }
+        ]
+      });
+      imageUrl = result.secure_url;
+      imagePublicId = result.public_id;
+      // Clean up local file after successful cloud upload
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+    } catch (cloudErr) {
+      console.error('Cloudinary upload failed:', cloudErr);
+      // Clean up temp file on failure too
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+      return res.status(500).json({ message: 'Cloudinary upload failed' });
     }
 
     // Create clothing item
@@ -258,12 +263,24 @@ router.delete('/:id', auth, async (req, res) => {
       userId: req.user._id
     });
 
-    if (!item) {
+  if (!item) {
       return res.status(404).json({ message: 'Clothing item not found' });
     }
 
-    // Delete image from Cloudinary
-    await cloudinary.uploader.destroy(item.imagePublicId);
+    // Delete image from Cloudinary if configured and public id exists
+    const cloudConfigured =
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET &&
+      !String(process.env.CLOUDINARY_CLOUD_NAME).startsWith('your-');
+
+    if (cloudConfigured && item.imagePublicId) {
+      try {
+        await cloudinary.uploader.destroy(item.imagePublicId);
+      } catch (cloudErr) {
+        console.error('Cloudinary destroy failed:', cloudErr);
+      }
+    }
 
     // Delete item from database
     await ClothingItem.findByIdAndDelete(req.params.id);

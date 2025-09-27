@@ -40,3 +40,4 @@ echo "   - AI-powered features"
 echo ""
 
 echo "Need help? Check mongodb-setup.md for detailed instructions."
+

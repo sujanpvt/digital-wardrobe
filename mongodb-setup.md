@@ -56,3 +56,4 @@ MONGODB_URI=mongodb+srv://wardrobe-user:wardrobe123@cluster0.xxxxx.mongodb.net/d
 - ✅ Free tier (512MB storage)
 - ✅ Automatic backups
 - ✅ Global availability
+

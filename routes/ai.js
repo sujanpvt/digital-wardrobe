@@ -14,7 +14,7 @@ const openai = new OpenAI({
 // Generate AI outfit suggestions
 router.post('/suggest-outfits', auth, async (req, res) => {
   try {
-    const { occasion, weather, style, season } = req.body;
+    const { occasion, weather, style, season, preferredColor } = req.body;
 
     // Get user's clothing items
     const userItems = await ClothingItem.find({
@@ -39,6 +39,143 @@ router.post('/suggest-outfits', auth, async (req, res) => {
       season: item.season,
       occasion: item.occasion
     }));
+
+    // If OpenAI is not available, use heuristic fallback based on color and occasion
+    const isOpenAIConfigured = Boolean(process.env.OPENAI_API_KEY);
+
+    // Helper: simple color harmony scoring
+    const neutrals = new Set(['black', 'white', 'gray', 'grey', 'beige', 'brown', 'navy']);
+    const complements = {
+      red: ['green', 'black', 'white'],
+      green: ['red', 'white', 'black'],
+      blue: ['orange', 'white', 'gray'],
+      orange: ['blue', 'white', 'black'],
+      yellow: ['purple', 'black', 'white'],
+      purple: ['yellow', 'white', 'gray'],
+      pink: ['gray', 'white', 'black'],
+      teal: ['pink', 'white', 'gray'],
+      brown: ['beige', 'white', 'blue'],
+      navy: ['white', 'beige', 'gray'],
+      beige: ['brown', 'white', 'navy'],
+      black: ['white', 'any'],
+      white: ['any']
+    };
+
+    const norm = (c) => (c || '').toLowerCase().trim();
+
+    function colorScore(items) {
+      const colors = items.map(i => norm(i.color)).filter(Boolean);
+      let score = 0;
+      const hasPreferred = preferredColor ? colors.includes(norm(preferredColor)) : false;
+      if (hasPreferred) score += 0.2;
+      const neutralCount = colors.filter(c => neutrals.has(c)).length;
+      score += neutralCount * 0.15; // neutrals improve compatibility
+      // Complementary boost
+      for (let i = 0; i < colors.length; i++) {
+        for (let j = i + 1; j < colors.length; j++) {
+          const a = colors[i];
+          const b = colors[j];
+          const comp = complements[a] || [];
+          if (comp.includes(b) || comp.includes('any')) score += 0.25;
+        }
+      }
+      return Math.min(score, 1);
+    }
+
+    // Helper: filter items by occasion/style/season when provided
+    function filterItems(items) {
+      return items.filter(i => {
+        const okOcc = occasion ? norm(i.occasion) === norm(occasion) || !i.occasion : true;
+        const okStyle = style ? norm(i.style) === norm(style) || !i.style : true;
+        const okSeason = season ? norm(i.season) === norm(season) || norm(season) === 'all-season' : true;
+        const okWash = !i.isInWash;
+        return okOcc && okStyle && okSeason && okWash;
+      });
+    }
+
+    function groupByCategory(items) {
+      const byCat = {
+        top: [],
+        bottom: [],
+        shoes: [],
+        accessories: [],
+        outerwear: []
+      };
+      items.forEach(i => {
+        const cat = i.category;
+        if (byCat[cat]) byCat[cat].push(i);
+      });
+      return byCat;
+    }
+
+    function heuristicSuggest(items) {
+      const filt = filterItems(items);
+      const byCat = groupByCategory(filt);
+      // Must have at least top+bottom+shoes
+      if (byCat.top.length === 0 || byCat.bottom.length === 0 || byCat.shoes.length === 0) {
+        return [];
+      }
+      // Build combinations and score
+      const combos = [];
+      byCat.top.slice(0, 12).forEach(t => {
+        byCat.bottom.slice(0, 12).forEach(b => {
+          byCat.shoes.slice(0, 12).forEach(s => {
+            const base = [t, b, s];
+            // optional accessory
+            const acc = byCat.accessories[0];
+            const items = acc ? [...base, acc] : base;
+            const cScore = colorScore(items);
+            // light tweak: occasion boost when all match
+            const allOccMatch = occasion && items.every(i => norm(i.occasion) === norm(occasion));
+            const score = cScore + (allOccMatch ? 0.1 : 0);
+            combos.push({
+              items,
+              score,
+              reasoning: `Balanced colors with ${(preferredColor || 'neutral focus')}. ${acc ? 'Accessory adds interest.' : ''}`,
+              colorHarmony: `Harmony score ${score.toFixed(2)} based on neutrals & complements`
+            });
+          });
+        });
+      });
+      combos.sort((a, b) => b.score - a.score);
+      const top3 = combos.slice(0, 3).map((c, idx) => ({
+        name: `Smart Match ${idx + 1}`,
+        items: c.items.map(i => i._id.toString()),
+        reasoning: c.reasoning,
+        confidence: Number((Math.min(1, c.score)).toFixed(2)),
+        occasion: occasion || 'casual',
+        colorHarmony: c.colorHarmony
+      }));
+      return top3;
+    }
+
+    // If OpenAI is unavailable, use heuristic suggestions immediately
+    if (!isOpenAIConfigured) {
+      const suggestions = heuristicSuggest(userItems);
+      const savedOutfits = [];
+      for (const suggestion of suggestions) {
+        if (suggestion.items && suggestion.items.length >= 2) {
+          const outfit = new Outfit({
+            userId: req.user._id,
+            name: suggestion.name,
+            items: suggestion.items,
+            occasion: suggestion.occasion || occasion,
+            style: style,
+            season: season,
+            isAIGenerated: true,
+            aiConfidence: suggestion.confidence,
+            notes: suggestion.reasoning + '\n\nColor Harmony: ' + suggestion.colorHarmony
+          });
+          await outfit.save();
+          savedOutfits.push(outfit);
+        }
+      }
+      return res.json({
+        message: 'AI outfit suggestions generated (heuristic)',
+        outfits: savedOutfits,
+        totalItems: userItems.length
+      });
+    }
 
     // Create AI prompt
     const prompt = `
@@ -73,7 +210,9 @@ Return ONLY a JSON array with this structure:
 ]
 `;
 
-    const completion = await openai.chat.completions.create({
+    let completion;
+    try {
+      completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         {
@@ -87,7 +226,34 @@ Return ONLY a JSON array with this structure:
       ],
       temperature: 0.7,
       max_tokens: 1500
-    });
+      });
+    } catch (openaiError) {
+      console.error('OpenAI error, falling back to heuristics:', openaiError);
+      const suggestions = heuristicSuggest(userItems);
+      const savedOutfits = [];
+      for (const suggestion of suggestions) {
+        if (suggestion.items && suggestion.items.length >= 2) {
+          const outfit = new Outfit({
+            userId: req.user._id,
+            name: suggestion.name,
+            items: suggestion.items,
+            occasion: suggestion.occasion || occasion,
+            style: style,
+            season: season,
+            isAIGenerated: true,
+            aiConfidence: suggestion.confidence,
+            notes: suggestion.reasoning + '\n\nColor Harmony: ' + suggestion.colorHarmony
+          });
+          await outfit.save();
+          savedOutfits.push(outfit);
+        }
+      }
+      return res.json({
+        message: 'AI outfit suggestions generated (heuristic)',
+        outfits: savedOutfits,
+        totalItems: userItems.length
+      });
+    }
 
     const aiResponse = completion.choices[0].message.content;
     let suggestions;
