@@ -11,6 +11,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// Prefer a configurable model; default to broadly available option
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
 // Generate AI outfit suggestions
 router.post('/suggest-outfits', auth, async (req, res) => {
   try {
@@ -253,23 +256,25 @@ For each outfit, provide:
 4. Occasion appropriateness
 5. Color harmony explanation
 
-Return ONLY a JSON array with this structure:
-[
-  {
-    "name": "Outfit Name",
-    "items": ["item_id_1", "item_id_2", "item_id_3"],
-    "reasoning": "Why this combination works",
-    "confidence": 0.85,
-    "occasion": "work",
-    "colorHarmony": "Explanation of color coordination"
-  }
-]
+Return ONLY a JSON object with this structure (no markdown, no comments):
+{
+  "outfits": [
+    {
+      "name": "Outfit Name",
+      "items": ["item_id_1", "item_id_2", "item_id_3"],
+      "reasoning": "Why this combination works",
+      "confidence": 0.85,
+      "occasion": "work",
+      "colorHarmony": "Explanation of color coordination"
+    }
+  ]
+}
 `;
 
     let completion;
     try {
       completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: OPENAI_MODEL,
       messages: [
         {
           role: "system",
@@ -280,6 +285,7 @@ Return ONLY a JSON array with this structure:
           content: prompt
         }
       ],
+      response_format: { type: 'json_object' },
       temperature: 0.7,
       max_tokens: 1500
       });
@@ -315,9 +321,10 @@ Return ONLY a JSON array with this structure:
     let suggestions;
 
     try {
-      suggestions = JSON.parse(aiResponse);
+      const parsed = JSON.parse(aiResponse);
+      suggestions = Array.isArray(parsed) ? parsed : parsed.outfits;
     } catch (parseError) {
-      console.error('AI response parsing error:', parseError);
+      console.error('AI response parsing error:', parseError, '\nRaw:', aiResponse);
       return res.status(500).json({ message: 'Error parsing AI response' });
     }
 
@@ -405,7 +412,7 @@ Provide analysis in JSON format:
 `;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: OPENAI_MODEL,
       messages: [
         {
           role: "system",
