@@ -10,7 +10,12 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors());
+// Configure CORS for production deployments. Allow all if not set.
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : undefined;
+const corsOptions = allowedOrigins ? { origin: allowedOrigins } : {};
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -42,8 +47,19 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
+// Serve frontend build in production or when explicitly enabled
+const serveFrontend = process.env.SERVE_FRONTEND === 'true' || process.env.NODE_ENV === 'production';
+if (serveFrontend) {
+  const buildPath = path.join(__dirname, 'frontend', 'build');
+  app.use(express.static(buildPath));
+  // For non-API routes, serve the React app
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(buildPath, 'index.html'));
+  });
+}
+
+// 404 handler for unknown API routes
+app.use('/api/*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 

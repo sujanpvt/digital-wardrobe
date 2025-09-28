@@ -1,291 +1,181 @@
-# Digital Wardrobe - AI-Powered Fashion Assistant
+# Digital Wardrobe – Deployment Guide
 
-A comprehensive digital wardrobe application that helps users organize their clothing, create outfits, and get AI-powered style suggestions.
+This guide explains how to deploy the Digital Wardrobe app for public use with a production-ready backend API and a hosted frontend so anyone can register, upload items, and use AI suggestions.
 
-## Features
+## Overview
+- Backend API: Node.js/Express, MongoDB
+- Frontend: React (Create React App)
+- Media: Cloudinary (recommended)
+- AI: OpenAI API (configurable `OPENAI_MODEL`, default `gpt-4o-mini`)
 
-### 🧥 **Wardrobe Management**
-- Upload and categorize clothing items with AI-powered analysis
-- Smart image processing with color extraction
-- Advanced filtering and search capabilities
-- Item tracking with wear count and last worn dates
+## Prerequisites
+- Cloud accounts: MongoDB Atlas, Cloudinary, hosting for backend (Railway/Render/Fly), hosting for frontend (Vercel/Netlify)
+- Environment variables ready (see “Environment Variables” section)
 
-### 🎨 **Dress-Up System**
-- Interactive outfit creation with drag-and-drop interface
-- Real-time outfit visualization
-- Category-based item selection
-- Random outfit generator
+## Environment Variables
+Create environment variables in your hosting providers (do not commit secrets). Use `env.example` as reference.
 
-### 🤖 **AI-Powered Features**
-- Intelligent outfit suggestions based on occasion, weather, and style
-- Color harmony analysis
-- Style compatibility scoring
-- Personalized recommendations
+Backend (.env on server):
+- `MONGODB_URI` – MongoDB Atlas connection string
+- `JWT_SECRET` – long random secret for tokens
+- `CLOUDINARY_CLOUD_NAME` – Cloudinary cloud name
+- `CLOUDINARY_API_KEY` – Cloudinary API key
+- `CLOUDINARY_API_SECRET` – Cloudinary API secret
+- `OPENAI_API_KEY` – OpenAI API key
+- `OPENAI_MODEL` – e.g. `gpt-4o-mini` (default)
+- `PORT` – provided by host or set (e.g. 8080/5000)
+- `NODE_ENV` – `production`
+- `CORS_ORIGIN` – frontend origin(s), comma-separated. Example: `https://your-frontend-domain.com`
 
-### 👗 **Outfit Management**
-- Save and organize favorite outfits
-- Tag and categorize outfits by occasion
-- Track outfit usage and ratings
-- AI-generated outfit suggestions
+Frontend (.env on frontend host):
+- `REACT_APP_API_URL` – backend API base URL, e.g. `https://your-backend-host/api`
 
-### 🧺 **Laundry Tracking**
-- Monitor items in wash
-- Track wash cycles and expected return dates
-- Overdue item alerts
-- Wash type categorization
+## Deploy the Backend (Railway example)
+1. Create a project on Railway.
+2. Deploy from GitHub repo.
+3. Set environment variables (see above).
+4. Ensure start command is `npm start` (uses `node server.js`).
+5. Railway provides a public URL (e.g. `https://your-app.up.railway.app`).
+6. Test health endpoint: `GET https://your-app.up.railway.app/api/health`.
 
-## Technology Stack
+Render/Fly/Heroku are similar: deploy Node service, set env vars, expose port.
 
-### Backend
-- **Node.js** with Express.js
-- **MongoDB** with Mongoose ODM
-- **Cloudinary** for image storage and processing
-- **OpenAI API** for AI-powered features
-- **JWT** for authentication
-- **Multer** for file uploads
+## Set Up MongoDB Atlas
+1. Create a free cluster.
+2. Create a database user with a strong password.
+3. Allow network access (IP whitelist or “Allow from anywhere” for testing).
+4. Copy the connection string into `MONGODB_URI`.
 
-### Frontend
-- **React.js** with TypeScript
-- **Tailwind CSS** for styling
-- **React Router** for navigation
-- **Framer Motion** for animations
-- **React Dropzone** for file uploads
-- **Axios** for API communication
+## Configure Cloudinary
+1. Create a Cloudinary account.
+2. Get cloud name, API key, API secret.
+3. Set them in backend environment.
 
-## Setup Instructions
+## Deploy the Frontend (Vercel example)
+1. Import the repo into Vercel.
+2. Set `REACT_APP_API_URL` to your backend public URL + `/api`.
+3. Build command: `npm run build` in `frontend/`.
+   - On Vercel, set “Root Directory” to `frontend`.
+4. After deploy, you get a public URL, e.g. `https://your-frontend.vercel.app`.
 
-### Prerequisites
-- Node.js (v16 or higher)
-- MongoDB (local or MongoDB Atlas)
-- Cloudinary account
-- OpenAI API key
+Netlify is similar: point to `frontend/`, run `npm run build`, publish `frontend/build`.
 
-### 1. Clone and Install Dependencies
+## CORS Configuration
+On the backend, set `CORS_ORIGIN` to your frontend domain(s). Multiple origins can be comma-separated.
 
-```bash
-# Install backend dependencies
-npm install
+Examples:
+- Production: `CORS_ORIGIN=https://your-frontend.vercel.app`
+- Local dev: `CORS_ORIGIN=http://localhost:3000`
 
-# Install frontend dependencies
-cd frontend
-npm install
-```
+## Frontend → Backend Connection
+- The frontend reads `REACT_APP_API_URL` at build time.
+- Example production value: `https://your-app.up.railway.app/api`.
 
-### 2. Environment Configuration
+## Verification Checklist
+- Health check works: `GET /api/health`
+- Register/Login works
+- Upload items to Cloudinary succeeds
+- AI endpoints work: `POST /api/ai/suggest-outfits`, `GET /api/ai/style-recommendations`
+- Outfits saved and retrievable
 
-Create a `.env` file in the root directory:
+## Optional: Custom Domain
+- Point `api.yourdomain.com` to backend hosting provider
+- Point `wardrobe.yourdomain.com` to frontend hosting provider
+- Update `REACT_APP_API_URL` and `CORS_ORIGIN` accordingly
 
-```env
-# Database
-MONGODB_URI=mongodb://localhost:27017/digital-wardrobe
+## Troubleshooting
+- 401 errors: token missing/expired; login again
+- CORS errors: ensure `CORS_ORIGIN` matches frontend URL exactly
+- Upload errors: verify Cloudinary credentials and URL usage
+- DB errors: check `MONGODB_URI` and network access
+- OpenAI errors: confirm `OPENAI_API_KEY` and accessible `OPENAI_MODEL`
 
-# JWT Secret
-JWT_SECRET=your-super-secret-jwt-key-here
+## Scripts
+- Backend: `npm start` (prod), `npm run dev` (dev)
+- Frontend: `cd frontend && npm start` (dev), `cd frontend && npm run build` (prod)
 
-# Cloudinary Configuration
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
+You’re ready to launch publicly. Configure envs, deploy backend, deploy frontend, set CORS, and test end-to-end.
 
-# OpenAI Configuration
-OPENAI_API_KEY=your-openai-api-key
+## Render Blueprint Deployment
 
-# Server Configuration
-PORT=5000
-NODE_ENV=development
-```
+Deploy with one click on Render using the included `render.yaml` blueprint (uses the project `Dockerfile`).
 
-### 3. Database Setup
+- In Render: New → Blueprint → connect your repository.
+- Confirm web service settings; the blueprint sets `healthCheckPath` to `/api/health`.
+- Set environment variables:
+  - `NODE_ENV=production`
+  - `SERVE_FRONTEND=true`
+  - `PORT=5000`
+  - `MONGODB_URI` (MongoDB Atlas connection string)
+  - `JWT_SECRET` (random string)
+  - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+  - `OPENAI_API_KEY` and optionally `OPENAI_MODEL` (defaults to `gpt-4o-mini` in blueprint)
+  - `CORS_ORIGIN` (optional; omit for single-host same-origin)
+- Deploy and wait for the health check to pass.
+- Open the service URL; the frontend is served by the backend and talks to `/api` on the same origin.
 
-Make sure MongoDB is running locally or configure MongoDB Atlas connection string.
+Notes:
+- The container exposes `5000`; Render maps it automatically.
+- The frontend is built with a relative API base (`/api`).
 
-### 4. Start the Application
+## Railway Deployment (Single-Host)
 
-```bash
-# Start backend server
-npm run dev
+Deploy the backend and serve the built frontend from the same origin on Railway. This project already includes a `Dockerfile` and an automatic frontend build during install.
 
-# Start frontend (in a new terminal)
-cd frontend
-npm start
-```
+Steps:
+- Create a new project on Railway and connect your repository.
+- Railway will detect the `Dockerfile` and build a container. If you opt not to use Docker, set Start Command to `npm start`.
+- Set environment variables:
+  - `NODE_ENV=production`
+  - `SERVE_FRONTEND=true`
+  - `PORT` (Railway sets this automatically; you can leave it unset)
+  - `MONGODB_URI` (use your Atlas connection string)
+  - `JWT_SECRET` (long random string)
+  - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+  - `OPENAI_API_KEY` and optionally `OPENAI_MODEL`
+  - `CORS_ORIGIN` (optional; omit for same-origin single-host)
+- Deploy and wait for the service to become healthy.
+- Verify `GET <railway-url>/api/health` returns OK, and open `<railway-url>/` to load the frontend.
 
-The application will be available at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
+Notes:
+- The frontend is built automatically via the root `postinstall` and served by the backend when `SERVE_FRONTEND=true`.
+- Single-host deployment removes the need for `REACT_APP_API_URL` in the frontend; it talks to `/api` on the same origin.
 
-## API Endpoints
+## Fly.io Deployment (Single-Host)
 
-### Authentication
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `GET /api/auth/me` - Get current user
-- `PUT /api/auth/preferences` - Update user preferences
+Use the included `fly.toml` to deploy the app as a single container service that serves both the backend API and the built frontend.
 
-### Clothing Items
-- `POST /api/items/upload` - Upload clothing item
-- `GET /api/items/user/:userId` - Get user's items
-- `PUT /api/items/:id` - Update item
-- `DELETE /api/items/:id` - Delete item
-- `PUT /api/items/:id/wash-status` - Update wash status
+Steps:
+- Install Fly CLI: `brew install flyctl` (macOS) or see docs.
+- Create app and configure: `fly launch` (it will pick up `fly.toml`).
+- Set secrets (required env vars) via CLI:
+  ```bash
+  fly secrets set \
+    MONGODB_URI="<your-atlas-uri>" \
+    JWT_SECRET="<random-string>" \
+    CLOUDINARY_CLOUD_NAME="<name>" \
+    CLOUDINARY_API_KEY="<key>" \
+    CLOUDINARY_API_SECRET="<secret>" \
+    OPENAI_API_KEY="<key>" \
+    OPENAI_MODEL="gpt-4o-mini" \
+    CORS_ORIGIN="https://your-frontend-domain.com"
+  ```
+- Deploy: `fly deploy`.
+- Verify `GET <fly-app-host>/api/health` returns OK, then open `<fly-app-host>/`.
 
-### Outfits
-- `POST /api/outfits/create` - Create outfit
-- `GET /api/outfits/user/:userId` - Get user's outfits
-- `PUT /api/outfits/:id` - Update outfit
-- `DELETE /api/outfits/:id` - Delete outfit
-- `POST /api/outfits/:id/wear` - Mark as worn
+Notes:
+- `fly.toml` sets `internal_port=5000`, maps to `80/443`, and adds an HTTP health check on `/api/health`.
+- Frontend is built and served by backend; same-origin calls to `/api`.
 
-### Laundry
-- `POST /api/laundry/add-items` - Add items to laundry
-- `GET /api/laundry/user/:userId` - Get laundry entries
-- `PUT /api/laundry/:id/status` - Update status
-- `DELETE /api/laundry/:id` - Delete entry
+## CI: Validate Docker Build on Push
 
-### AI Features
-- `POST /api/ai/suggest-outfits` - Get AI outfit suggestions
-- `POST /api/ai/analyze-outfit` - Analyze outfit compatibility
-- `GET /api/ai/style-recommendations` - Get style recommendations
+This repository includes a GitHub Actions workflow to validate that the Docker image builds successfully on every push and pull request to `main`.
 
-## Key Features Implementation
+What it does:
+- Checks out the repository
+- Sets up Docker Buildx
+- Builds the image using the root `Dockerfile` without pushing
 
-### 1. Image Upload & Processing
-- Automatic image optimization with Cloudinary
-- Color extraction and analysis
-- Smart categorization based on image content
-
-### 2. AI Outfit Matching
-- OpenAI GPT-4 integration for intelligent suggestions
-- Color harmony analysis
-- Style compatibility scoring
-- Occasion-appropriate recommendations
-
-### 3. Interactive Dress-Up
-- Real-time outfit visualization
-- Category-based item selection
-- Drag-and-drop interface
-- Outfit saving and management
-
-### 4. Laundry Tracking
-- Item status management
-- Wash cycle tracking
-- Overdue notifications
-- Return date monitoring
-
-## Database Schema
-
-### User
-```javascript
-{
-  username: String,
-  email: String,
-  password: String (hashed),
-  preferences: {
-    style: String,
-    colors: [String],
-    occasions: [String]
-  }
-}
-```
-
-### ClothingItem
-```javascript
-{
-  userId: ObjectId,
-  name: String,
-  category: String,
-  subcategory: String,
-  color: String,
-  imageUrl: String,
-  tags: [String],
-  isInWash: Boolean,
-  wearCount: Number,
-  style: String,
-  season: String
-}
-```
-
-### Outfit
-```javascript
-{
-  userId: ObjectId,
-  name: String,
-  items: [ObjectId],
-  occasion: String,
-  rating: Number,
-  isFavorite: Boolean,
-  isAIGenerated: Boolean
-}
-```
-
-### Laundry
-```javascript
-{
-  userId: ObjectId,
-  items: [ObjectId],
-  washDate: Date,
-  expectedReturnDate: Date,
-  status: String,
-  washType: String
-}
-```
-
-## Development
-
-### Project Structure
-```
-digital-wardrobe/
-├── backend/
-│   ├── models/          # Database models
-│   ├── routes/          # API routes
-│   ├── middleware/      # Custom middleware
-│   └── server.js        # Main server file
-├── frontend/
-│   ├── src/
-│   │   ├── components/  # React components
-│   │   ├── pages/       # Page components
-│   │   ├── contexts/    # React contexts
-│   │   └── services/    # API services
-│   └── public/
-└── uploads/             # Temporary file storage
-```
-
-### Adding New Features
-
-1. **Backend**: Add new routes in `/routes/` directory
-2. **Frontend**: Create components in `/src/components/`
-3. **Database**: Update models in `/models/` directory
-4. **API**: Add new endpoints following RESTful conventions
-
-## Deployment
-
-### Backend Deployment (Heroku/Railway)
-1. Set environment variables in deployment platform
-2. Ensure MongoDB Atlas connection
-3. Configure Cloudinary credentials
-4. Deploy with `git push heroku main`
-
-### Frontend Deployment (Vercel/Netlify)
-1. Build the React app: `npm run build`
-2. Deploy to Vercel or Netlify
-3. Set environment variables for API URL
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Support
-
-For questions or support, please open an issue in the GitHub repository.
-
----
-
-**Built with ❤️ for the hackathon**
+Why it helps:
+- Catches build failures early
+- Ensures that cloud deploys (Render/Fly/Railway) will succeed

@@ -28,13 +28,15 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 50 * 1024 * 1024 // 50MB limit to allow short videos
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    const isImage = file.mimetype.startsWith('image/');
+    const isVideo = file.mimetype.startsWith('video/');
+    if (isImage || isVideo) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'), false);
+      cb(new Error('Only image or video files are allowed'), false);
     }
   }
 });
@@ -43,7 +45,7 @@ const upload = multer({
 router.post('/upload', auth, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No image file provided' });
+      return res.status(400).json({ message: 'No media file provided' });
     }
 
     const {
@@ -79,16 +81,26 @@ router.post('/upload', auth, upload.single('image'), async (req, res) => {
 
     let imageUrl;
     let imagePublicId;
+    let mediaType = 'image';
 
     try {
-      const result = await cloudinary.uploader.upload(req.file.path, {
+      const isImage = req.file.mimetype.startsWith('image/');
+      const uploadOptions = {
         folder: 'wardrobe',
-        transformation: [
+        resource_type: 'auto'
+      };
+      if (isImage) {
+        uploadOptions.transformation = [
           { width: 800, height: 800, crop: 'fill', quality: 'auto' }
-        ]
-      });
+        ];
+      }
+
+      const result = await cloudinary.uploader.upload(req.file.path, uploadOptions);
       imageUrl = result.secure_url;
       imagePublicId = result.public_id;
+      if (result.resource_type === 'video') {
+        mediaType = 'video';
+      }
       // Clean up local file after successful cloud upload
       try { fs.unlinkSync(req.file.path); } catch (_) {}
     } catch (cloudErr) {
@@ -110,6 +122,7 @@ router.post('/upload', auth, upload.single('image'), async (req, res) => {
       size,
       imageUrl,
       imagePublicId,
+      mediaType,
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
       style,
       season,

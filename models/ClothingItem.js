@@ -60,6 +60,11 @@ const clothingItemSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  mediaType: {
+    type: String,
+    enum: ['image', 'video'],
+    default: 'image'
+  },
   tags: [{
     type: String,
     trim: true

@@ -1,0 +1,34 @@
+app = "digital-wardrobe"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  SERVE_FRONTEND = "true"
+  PORT = "5000"
+
+[[services]]
+  internal_port = 5000
+  protocol = "tcp"
+
+  [services.concurrency]
+    type = "connections"
+    soft_limit = 25
+    hard_limit = 50
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    path = "/api/health"
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "30s"
+    method = "get"

@@ -1,0 +1,21 @@
+# Ignore files not needed in the Docker image
+node_modules
+frontend/node_modules
+
+# VCS
+.git
+.gitignore
+
+# Env files / secrets
+.env
+frontend/.env
+.env.*
+frontend/.env.*
+
+# Local uploads and coverage
+uploads/
+coverage/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db

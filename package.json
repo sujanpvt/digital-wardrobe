@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "client": "cd frontend && npm start",
     "build": "cd frontend && npm run build",
+    "postinstall": "cd frontend && npm ci && REACT_APP_API_URL=/api npm run build",
     "install-client": "cd frontend && npm install",
     "test-setup": "node test-setup.js",
     "setup": "npm install && cd frontend && npm install && echo 'Setup complete! Run npm run test-setup to verify configuration.'"
