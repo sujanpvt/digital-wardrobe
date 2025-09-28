@@ -60,18 +60,23 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login
+// Login (supports email OR username as identifier)
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, username, password } = req.body;
+
+    // Accept either email or username as the identifier
+    const identifier = (email || username || '').trim();
 
     // Validation
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Please provide email and password' });
+    if (!identifier || !password) {
+      return res.status(400).json({ message: 'Please provide email/username and password' });
     }
 
-    // Find user
-    const user = await User.findOne({ email });
+    // Find user by email OR username
+    const user = await User.findOne({
+      $or: [{ email: identifier }, { username: identifier }]
+    });
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }

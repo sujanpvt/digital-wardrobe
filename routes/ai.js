@@ -35,6 +35,7 @@ router.post('/suggest-outfits', auth, async (req, res) => {
       category: item.category,
       subcategory: item.subcategory,
       color: item.color,
+      colorHex: item.colorHex || null,
       style: item.style,
       season: item.season,
       occasion: item.occasion
@@ -62,23 +63,78 @@ router.post('/suggest-outfits', auth, async (req, res) => {
     };
 
     const norm = (c) => (c || '').toLowerCase().trim();
+    const isHex = (c) => /^#([0-9a-f]{6})$/i.test((c || '').trim());
+    const hexToHsl = (hex) => {
+      // expects #RRGGBB
+      const res = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex);
+      if (!res) return null;
+      const r = parseInt(res[1], 16) / 255;
+      const g = parseInt(res[2], 16) / 255;
+      const b = parseInt(res[3], 16) / 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+      if (max === min) {
+        h = s = 0; // achromatic
+      } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+          default: h = 0;
+        }
+        h /= 6;
+      }
+      return { h: h * 360, s: s * 100, l: l * 100 };
+    };
+    const hueDistance = (h1, h2) => {
+      const d = Math.abs(h1 - h2) % 360;
+      return d > 180 ? 360 - d : d;
+    };
 
     function colorScore(items) {
-      const colors = items.map(i => norm(i.color)).filter(Boolean);
       let score = 0;
-      const hasPreferred = preferredColor ? colors.includes(norm(preferredColor)) : false;
-      if (hasPreferred) score += 0.2;
+      const colors = items.map(i => norm(i.color)).filter(Boolean);
+      const hexes = items.map(i => i.colorHex).filter(Boolean);
+
+      // Word-based scoring (fallback)
+      const hasPreferredWord = preferredColor && !isHex(preferredColor)
+        ? colors.includes(norm(preferredColor))
+        : false;
+      if (hasPreferredWord) score += 0.2;
       const neutralCount = colors.filter(c => neutrals.has(c)).length;
       score += neutralCount * 0.15; // neutrals improve compatibility
-      // Complementary boost
       for (let i = 0; i < colors.length; i++) {
         for (let j = i + 1; j < colors.length; j++) {
           const a = colors[i];
           const b = colors[j];
           const comp = complements[a] || [];
-          if (comp.includes(b) || comp.includes('any')) score += 0.25;
+          if (comp.includes(b) || comp.includes('any')) score += 0.2;
         }
       }
+
+      // Hex-based scoring
+      const prefHexHsl = preferredColor && isHex(preferredColor) ? hexToHsl(preferredColor) : null;
+      const hsls = hexes.map(h => hexToHsl(h)).filter(Boolean);
+      if (prefHexHsl) {
+        // prefer items close to preferred hue (analogous) or complementary
+        hsls.forEach(hsl => {
+          const d = hueDistance(prefHexHsl.h, hsl.h);
+          if (d <= 30) score += 0.15; // analogous
+          if (Math.abs(d - 180) <= 20) score += 0.15; // complementary
+        });
+      }
+      // Pairwise harmony among item hues
+      for (let i = 0; i < hsls.length; i++) {
+        for (let j = i + 1; j < hsls.length; j++) {
+          const d = hueDistance(hsls[i].h, hsls[j].h);
+          if (d <= 30) score += 0.1; // analogous harmony
+          if (Math.abs(d - 180) <= 20) score += 0.15; // complementary harmony
+          if (Math.abs(d - 120) <= 20) score += 0.08; // triadic harmony
+        }
+      }
+
       return Math.min(score, 1);
     }
 

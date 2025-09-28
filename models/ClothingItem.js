@@ -39,6 +39,11 @@ const clothingItemSchema = new mongoose.Schema({
     required: true,
     enum: ['black', 'white', 'red', 'blue', 'green', 'yellow', 'purple', 'pink', 'orange', 'brown', 'gray', 'navy', 'beige', 'maroon', 'teal']
   },
+  // Optional precise color in hex (e.g., #RRGGBB)
+  colorHex: {
+    type: String,
+    trim: true
+  },
   brand: {
     type: String,
     trim: true
